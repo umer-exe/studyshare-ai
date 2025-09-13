@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -36,12 +37,12 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="sticky top-0 z-40 w-full bg-white shadow-sm">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-          <a href="/" className="inline-flex items-baseline gap-0 font-extrabold text-xl">
+          <Link href="/" className="inline-flex items-baseline gap-0 font-extrabold text-xl">
             <span className="bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
               StudyShare
             </span>
             <span className="text-slate-900">.AI</span>
-          </a>
+          </Link>
 
           <button
             onClick={handleSignOut}
