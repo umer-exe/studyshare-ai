@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +11,6 @@ export default function HomePage() {
   const router = useRouter();
 
   // UI
-  const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
 
   // Auth
@@ -34,10 +34,7 @@ export default function HomePage() {
     if (user) router.replace("/dashboard");
   }, [user, router]);
 
-  useEffect(() => {
-    setLoading(false);
-  }, [user]);
-
+  // Header shadow on scroll
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -56,20 +53,16 @@ export default function HomePage() {
         if (error) throw error;
       }
       router.replace("/dashboard");
-    } catch (e: any) {
-      setError(e?.message ?? "Something went wrong.");
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        setError("An unexpected error occurred.");
+      }
     } finally {
       setSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-base">Loading...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-purple-50 to-white text-slate-800">
@@ -80,12 +73,15 @@ export default function HomePage() {
         }`}
       >
         <div className="mx-auto max-w-6xl px-4 py-3">
-          <a href="/" className="inline-flex items-baseline gap-0 font-extrabold text-lg md:text-xl">
+          <Link
+            href="/"
+            className="inline-flex items-baseline gap-0 font-extrabold text-lg md:text-xl"
+          >
             <span className="bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
               StudyShare
             </span>
             <span className="text-slate-900">.AI</span>
-          </a>
+          </Link>
           <p className="mt-1 text-xs text-slate-500">
             Your AI-powered study assistant & collaborative CS resource hub.
           </p>
@@ -174,7 +170,13 @@ export default function HomePage() {
                 disabled={submitting}
                 className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-60"
               >
-                {submitting ? (isLogin ? "Logging in..." : "Creating account...") : isLogin ? "Login" : "Sign Up"}
+                {submitting
+                  ? isLogin
+                    ? "Logging in..."
+                    : "Creating account..."
+                  : isLogin
+                  ? "Login"
+                  : "Sign Up"}
               </button>
 
               <p
@@ -189,7 +191,7 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-10 border-top border-slate-200">
+      <footer className="mt-10 border-t border-slate-200">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs text-slate-500 sm:flex-row">
           <p>© {new Date().getFullYear()} StudyShare.AI — Study smarter, share better.</p>
           <div className="flex gap-3">
