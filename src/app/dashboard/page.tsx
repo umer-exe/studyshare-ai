@@ -38,7 +38,6 @@ export default function DashboardPage() {
     DBMS: "dbms",
     "Differential Equations": "diff-eq",
   };
-
   const courses = Object.keys(courseMap);
 
   return (
@@ -90,29 +89,21 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Quick actions */}
+          {/* Quick actions (Upload only for MVP) */}
           <div className="mt-10 grid gap-5 md:grid-cols-2">
             <div className="rounded-xl border bg-white p-5 shadow-sm hover:shadow-md transition">
               <h2 className="mb-2 text-lg font-semibold text-purple-600">Upload a Note</h2>
-              <p className="text-sm text-slate-600">Upload a PDF or text note to any course.</p>
-              <button
-                onClick={() => router.push("/courses")}
-                className="mt-3 text-xs text-purple-600 underline hover:text-purple-700"
-              >
-                Upload Note →
-              </button>
-            </div>
-
-            <div className="rounded-xl border bg-white p-5 shadow-sm hover:shadow-md transition">
-              <h2 className="mb-2 text-lg font-semibold text-purple-600">Create a Topic</h2>
               <p className="text-sm text-slate-600">
-                Create a new topic to organize your notes. (Select a course first)
+                Pick a course, then upload a PDF or paste text.
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                💡 Tip: Use a descriptive title like <em>“Week 3 — Sorting Notes”</em> so others can find it easily.
               </p>
               <button
                 onClick={() => router.push("/courses")}
                 className="mt-3 text-xs text-purple-600 underline hover:text-purple-700"
               >
-                Create Topic →
+                Choose a course →
               </button>
             </div>
           </div>
