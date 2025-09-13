@@ -184,10 +184,10 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs text-slate-500 sm:flex-row">
           <p>© {new Date().getFullYear()} StudyShare.AI — Study smarter, share better.</p>
           <div className="flex gap-3">
-            <a href="https://github.com/YOUR_GITHUB" className="hover:text-slate-700">
+            <a href="https://github.com/umer-exe" className="hover:text-slate-700">
               GitHub
             </a>
-            <a href="https://www.linkedin.com/in/YOUR_LINKEDIN" className="hover:text-slate-700">
+            <a href="https://www.linkedin.com/in/umer-malik28" className="hover:text-slate-700">
               LinkedIn
             </a>
           </div>
