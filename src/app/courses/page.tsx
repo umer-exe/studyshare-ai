@@ -1,77 +1,79 @@
-// src/app/courses/page.tsx
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-// import { supabase } from "@/lib/supabaseClient"; // when you switch to DB
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
-type Course = { slug: string; name: string };
-
-// Keep DB off for now
-const USE_SUPABASE = false;
-
-// ✅ Your 4 originals only
-const HARDCODED: Course[] = [
-  { slug: "dsa", name: "Data Structures & Algorithms" },
-  { slug: "discrete-math", name: "Discrete Math" },
-  { slug: "dbms", name: "Database Management Systems" },
-  { slug: "diff-eq", name: "Differential Equations" },
+const COURSES = [
+  { name: "Data Structures & Algorithms", slug: "dsa" },
+  { name: "Discrete Math", slug: "discrete-math" },
+  { name: "Database Management Systems", slug: "dbms" },
+  { name: "Differential Equations", slug: "diff-eq" },
 ];
 
 export default function CoursesPage() {
-  const [courses, setCourses] = useState<Course[]>(HARDCODED);
-  const [loading, setLoading] = useState<boolean>(USE_SUPABASE);
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
+  // Optional: restrict to logged-in users
   useEffect(() => {
-    if (!USE_SUPABASE) return;
+    if (loading) return;
+    if (!user) router.replace("/");
+  }, [user, loading, router]);
 
-    const load = async () => {
-      setLoading(true);
-      // const { data, error } = await supabase.from("courses").select("slug,name").order("name");
-      // if (error) {
-      //   console.error(error);
-      //   setCourses(HARDCODED);
-      // } else {
-      //   setCourses((data ?? []).map((c: any) => ({ slug: c.slug, name: c.name })));
-      // }
-      setLoading(false);
-    };
-
-    load();
-  }, []);
-
-  if (loading) {
+  if (loading || !user) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <p>Loading courses…</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10">
-      <h1 className="mb-6 text-2xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
-        Courses
-      </h1>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {courses.map((c) => (
-          <Link
-            key={c.slug}
-            href={`/courses/${c.slug}`}
-            className="rounded-xl border bg-white p-5 shadow-sm hover:shadow-md transition"
-          >
-            <h2 className="text-lg font-semibold text-purple-600">{c.name}</h2>
-            <p className="text-xs text-slate-500">View course →</p>
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white text-slate-800">
+      <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur shadow-sm">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+          <Link href="/dashboard" className="text-sm text-purple-600 hover:underline">
+            ← Back to dashboard
           </Link>
-        ))}
-      </div>
 
-      {!USE_SUPABASE && (
-        <p className="mt-6 text-xs text-slate-500">
-          (Using hardcoded list for now. We’ll switch to Supabase later.)
+          <div className="select-none font-extrabold">
+            <span className="bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
+              StudyShare
+            </span>
+            <span className="text-slate-900">.AI</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-4 py-10">
+        <h1 className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
+          📚 Browse Courses
+        </h1>
+        <p className="mt-2 mb-8 text-sm md:text-base text-slate-600">
+          Select a course to view notes or upload your own.
         </p>
-      )}
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {COURSES.map((c) => (
+            <Link
+              key={c.slug}
+              href={`/courses/${c.slug}`}
+              className="rounded-xl border bg-white p-6 text-center shadow-sm hover:shadow-md hover:scale-[1.02] transition"
+            >
+              <h2 className="text-lg font-semibold text-purple-600">{c.name}</h2>
+              <span className="mt-2 block text-xs text-purple-600 underline">
+                View course →
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        <p className="mt-10 text-center text-xs text-slate-500">
+          More courses coming soon. You’ll be able to add new ones later.
+        </p>
+      </main>
     </div>
   );
 }
