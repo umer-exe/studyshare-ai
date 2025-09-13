@@ -1,27 +1,42 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient"; // adjust path if needed
-import { User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabaseClient";
 
-export function useAuth() {
+/**
+ * React hook that returns the current Supabase user and a loading flag.
+ * loading = true  -> session is resolving (no redirects should run)
+ * loading = false -> user is either a real User or null
+ */
+export function useAuth(): { user: User | null; loading: boolean } {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Fetch initial user
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-    });
+    let isMounted = true;
+
+    const init = async () => {
+      // Resolve the current session once on mount
+      const { data } = await supabase.auth.getSession();
+      if (!isMounted) return;
+      setUser(data.session?.user ?? null);
+      setLoading(false);
+    };
+
+    init();
 
     // Subscribe to auth changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      setUser(session?.user ?? null);
+      // Once we've gotten the first event, we consider auth resolved
+      setLoading(false);
     });
 
     return () => {
-      listener.subscription.unsubscribe();
+      isMounted = false;
+      sub.subscription.unsubscribe();
     };
   }, []);
 
-  return user;
+  return { user, loading };
 }
