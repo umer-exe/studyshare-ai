@@ -57,8 +57,9 @@ export default function DashboardPage() {
       <main className="flex-1 px-4 py-10">
         <div className="mx-auto max-w-6xl">
           <h1 className="mb-6 text-3xl font-bold">
-            👋 Welcome, {user.email.split("@")[0]}!
-          </h1>
+  👋 Welcome, {user.email?.split("@")[0] ?? "User"}!
+</h1>
+
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {/* Course cards */}
