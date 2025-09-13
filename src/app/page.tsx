@@ -1,20 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function HomePage() {
   const user = useAuth();
+  const router = useRouter();
 
+  // UI
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
 
-  const [isLogin, setIsLogin] = useState(false);
+  // Auth
+  const [isLogin, setIsLogin] = useState(false); // default to "Create an Account"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Public preview courses
   const previewCourses = [
     "Data Structures & Algorithms",
     "Operating Systems",
@@ -23,7 +29,14 @@ export default function HomePage() {
     "Discrete Math",
   ];
 
-  useEffect(() => setLoading(false), [user]);
+  // Redirect already-logged-in users straight to dashboard
+  useEffect(() => {
+    if (user) router.replace("/dashboard");
+  }, [user, router]);
+
+  useEffect(() => {
+    setLoading(false);
+  }, [user]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
@@ -33,12 +46,20 @@ export default function HomePage() {
 
   const handleAuth = async () => {
     setError(null);
-    if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return setError(error.message);
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return setError(error.message);
+    setSubmitting(true);
+    try {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+      }
+      router.replace("/dashboard");
+    } catch (e: any) {
+      setError(e?.message ?? "Something went wrong.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -71,7 +92,9 @@ export default function HomePage() {
         </div>
       </header>
 
+      {/* Main */}
       <main className="flex-1 px-4 py-10">
+        {/* Public Landing (shown only when not logged in) */}
         {!user && (
           <div className="mx-auto max-w-5xl">
             {/* Hero */}
@@ -84,8 +107,9 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* Features */}
+            {/* Feature Cards */}
             <div className="mb-6 grid gap-5 md:grid-cols-2">
+              {/* AI informational card */}
               <div className="relative -rotate-1 rounded-xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
                 <span className="absolute -top-2 left-6 h-5 w-16 -rotate-3 rounded-sm bg-purple-200/70" />
                 <h2 className="mb-1 text-lg font-extrabold text-purple-700">AI Study Assistant</h2>
@@ -94,6 +118,7 @@ export default function HomePage() {
                 </p>
               </div>
 
+              {/* Courses preview chips */}
               <div className="relative rotate-1 rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-5 shadow-sm">
                 <span className="absolute -top-2 left-6 h-5 w-16 rotate-2 rounded-sm bg-fuchsia-200/70" />
                 <h2 className="mb-1 text-lg font-extrabold text-fuchsia-700">Shared Resource Bank</h2>
@@ -120,7 +145,7 @@ export default function HomePage() {
               🔒 Sign in to access notes, upload your own, and use AI features.
             </p>
 
-            {/* Auth Card */}
+            {/* Inline Auth */}
             <div className="mx-auto max-w-md rounded-xl bg-white p-7 shadow-md">
               <h3 className="mb-5 text-center text-[1.3rem] font-extrabold text-purple-700">
                 {isLogin ? "Login" : "Create an Account"}
@@ -146,13 +171,14 @@ export default function HomePage() {
 
               <button
                 onClick={handleAuth}
-                className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-purple-700"
+                disabled={submitting}
+                className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-60"
               >
-                {isLogin ? "Login" : "Sign Up"}
+                {submitting ? (isLogin ? "Logging in..." : "Creating account...") : isLogin ? "Login" : "Sign Up"}
               </button>
 
               <p
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => setIsLogin((v) => !v)}
                 className="mt-3 cursor-pointer text-center text-xs text-purple-600 hover:underline"
               >
                 {isLogin ? "New here? Create an account" : "Already have an account? Login"}
@@ -160,42 +186,10 @@ export default function HomePage() {
             </div>
           </div>
         )}
-
-        {user && (
-          <div className="mx-auto max-w-4xl">
-            <h1 className="mb-7 text-2xl font-bold">
-              👋 Welcome back, {user.email.split("@")[0]}!
-            </h1>
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="rounded-xl border bg-white p-5 shadow-sm">
-                <h2 className="mb-1 text-lg font-semibold text-purple-600">
-                  Step 1: Pick a Course
-                </h2>
-                <p className="mb-2 text-sm text-slate-600">
-                  Start with any CS course — DSA, OS, DBMS, Networks.
-                </p>
-                <button className="text-xs text-purple-600 underline hover:text-purple-700">
-                  View Courses →
-                </button>
-              </div>
-              <div className="rounded-xl border bg-white p-5 shadow-sm">
-                <h2 className="mb-1 text-lg font-semibold text-purple-600">
-                  Step 2: Upload a Note
-                </h2>
-                <p className="mb-2 text-sm text-slate-600">
-                  Upload your first PDF or text note and auto-extract content.
-                </p>
-                <button className="text-xs text-purple-600 underline hover:text-purple-700">
-                  Upload Note →
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
 
       {/* Footer */}
-      <footer className="mt-10 border-t border-slate-200">
+      <footer className="mt-10 border-top border-slate-200">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs text-slate-500 sm:flex-row">
           <p>© {new Date().getFullYear()} StudyShare.AI — Study smarter, share better.</p>
           <div className="flex gap-3">
