@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -10,7 +10,7 @@ export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  // Single redirect: only after auth has resolved
+  // Redirect if not logged in (only after auth resolved)
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace("/");
@@ -30,6 +30,16 @@ export default function DashboardPage() {
     await supabase.auth.signOut();
     router.replace("/");
   };
+
+  // ✅ 4 originals only
+  const courseMap: Record<string, string> = {
+    DSA: "dsa",
+    "Discrete Math": "discrete-math",
+    DBMS: "dbms",
+    "Differential Equations": "diff-eq",
+  };
+
+  const courses = Object.keys(courseMap);
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-purple-50 to-white text-slate-800">
@@ -59,17 +69,21 @@ export default function DashboardPage() {
             👋 Welcome, {user.email?.split("@")[0] ?? "User"}!
           </h1>
 
+          {/* Course cards (4 only) */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {["DSA", "Discrete Math", "DBMS"].map((course) => (
+            {courses.map((course) => (
               <div
                 key={course}
-                className="rounded-xl border bg-white p-5 shadow-sm hover:shadow-md hover:scale-[1.01] transition cursor-pointer"
+                className="rounded-xl border bg-white p-5 shadow-sm hover:shadow-md hover:scale-[1.01] transition"
               >
                 <h2 className="mb-2 text-lg font-semibold text-purple-600">{course}</h2>
                 <p className="text-sm text-slate-600">
                   Explore notes, upload resources, and ask AI for help in this course.
                 </p>
-                <button className="mt-3 text-xs text-purple-600 underline hover:text-purple-700">
+                <button
+                  onClick={() => router.push(`/courses/${courseMap[course]}`)}
+                  className="mt-3 text-xs text-purple-600 underline hover:text-purple-700"
+                >
                   Go to course →
                 </button>
               </div>
@@ -81,7 +95,10 @@ export default function DashboardPage() {
             <div className="rounded-xl border bg-white p-5 shadow-sm hover:shadow-md transition">
               <h2 className="mb-2 text-lg font-semibold text-purple-600">Upload a Note</h2>
               <p className="text-sm text-slate-600">Upload a PDF or text note to any course.</p>
-              <button className="mt-3 text-xs text-purple-600 underline hover:text-purple-700">
+              <button
+                onClick={() => router.push("/courses")}
+                className="mt-3 text-xs text-purple-600 underline hover:text-purple-700"
+              >
                 Upload Note →
               </button>
             </div>
@@ -91,7 +108,10 @@ export default function DashboardPage() {
               <p className="text-sm text-slate-600">
                 Create a new topic to organize your notes. (Select a course first)
               </p>
-              <button className="mt-3 text-xs text-purple-600 underline hover:text-purple-700 disabled:opacity-50">
+              <button
+                onClick={() => router.push("/courses")}
+                className="mt-3 text-xs text-purple-600 underline hover:text-purple-700"
+              >
                 Create Topic →
               </button>
             </div>

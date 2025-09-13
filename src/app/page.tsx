@@ -26,6 +26,7 @@ export default function HomePage() {
   const previewCourses = [
     "DSA",,
     "DBMS",
+    "Differential Equations",
     "Discrete Math",
   ];
 
