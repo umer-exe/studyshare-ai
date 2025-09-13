@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -12,16 +12,11 @@ type Note = {
   id: string;
   title: string;
   file_url?: string | null;
-  storage_path?: string | null;
   content?: string | null;
   user_id: string;
   created_at: string;
+  storage_path?: string | null;
 };
-
-function sanitizeName(name: string) {
-  // Keep filename simple for URLs
-  return name.replace(/[^\w.-]+/g, "_");
-}
 
 export default function CoursePage() {
   const { slug } = useParams<{ slug: string | string[] }>();
@@ -29,6 +24,7 @@ export default function CoursePage() {
     () => (typeof slug === "string" ? slug : Array.isArray(slug) ? slug[0] : ""),
     [slug]
   );
+
   const router = useRouter();
   const { user, loading } = useAuth();
 
@@ -38,7 +34,6 @@ export default function CoursePage() {
   const [textContent, setTextContent] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -46,20 +41,21 @@ export default function CoursePage() {
     if (!user) router.replace("/");
   }, [user, loading, router]);
 
-  // Fetch notes
-  const fetchNotes = async () => {
+  // Fetch notes (stable reference for eslint)
+  const fetchNotes = useCallback(async () => {
+    if (!slugStr) return;
     const { data, error } = await supabase
       .from("notes")
-      .select("id,title,file_url,storage_path,content,user_id,created_at")
+      .select("*")
       .eq("course_slug", slugStr)
       .order("created_at", { ascending: false });
 
     if (!error && data) setNotes(data as Note[]);
-  };
+  }, [slugStr]);
 
   useEffect(() => {
-    if (slugStr) fetchNotes();
-  }, [slugStr]);
+    fetchNotes();
+  }, [fetchNotes]);
 
   if (loading || !user) {
     return (
@@ -70,10 +66,8 @@ export default function CoursePage() {
   }
 
   const handleSave = async () => {
-    setError(null);
-
     if (!title.trim()) {
-      setError("Please give your note a title.");
+      alert("Please give your note a title!");
       return;
     }
 
@@ -82,51 +76,38 @@ export default function CoursePage() {
 
       if (mode === "pdf") {
         if (!pdfFile) {
-          setError("Please select a PDF file.");
+          alert("Please select a PDF file.");
           return;
         }
         if (pdfFile.type !== "application/pdf") {
-          setError("Only PDF files are allowed.");
+          alert("Only PDF files are allowed.");
           return;
         }
         if (pdfFile.size > MAX_FILE_SIZE) {
-          setError("File too large! Max size is 10MB.");
+          alert("File too large! Max size is 10MB.");
           return;
         }
 
-        // Build a storage path that starts with userId (needed for owner policies)
-        const uuid =
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-        const cleanName = sanitizeName(pdfFile.name);
-        const storagePath = `${user.id}/${slugStr}/${uuid}-${cleanName}`;
-
         // Upload PDF to Supabase Storage
-        const { error: uploadError } = await supabase.storage
-          .from("notes")
-          .upload(storagePath, pdfFile, { cacheControl: "3600", upsert: false });
-
+        const filePath = `${user.id}/${slugStr}/${crypto.randomUUID()}-${pdfFile.name}`;
+        const { error: uploadError } = await supabase.storage.from("notes").upload(filePath, pdfFile);
         if (uploadError) throw uploadError;
 
         // Get public URL
-        const { data: urlData } = supabase.storage
-          .from("notes")
-          .getPublicUrl(storagePath);
+        const { data: urlData } = supabase.storage.from("notes").getPublicUrl(filePath);
 
-        // Insert row in DB (store storage_path too)
+        // Insert row in DB
         const { error: insertError } = await supabase.from("notes").insert({
           course_slug: slugStr,
           user_id: user.id,
           title: title.trim(),
           file_url: urlData.publicUrl,
-          storage_path: storagePath,
+          storage_path: filePath,
         });
         if (insertError) throw insertError;
       } else {
         if (!textContent.trim()) {
-          setError("Please paste some text.");
+          alert("Please paste some text.");
           return;
         }
         const { error: insertError } = await supabase.from("notes").insert({
@@ -134,8 +115,8 @@ export default function CoursePage() {
           user_id: user.id,
           title: title.trim(),
           content: textContent.trim(),
-          file_url: null,
           storage_path: null,
+          file_url: null,
         });
         if (insertError) throw insertError;
       }
@@ -144,9 +125,11 @@ export default function CoursePage() {
       setPdfFile(null);
       setTextContent("");
       await fetchNotes();
-    } catch (e: any) {
-      console.error(e);
-      setError(e?.message || "Something went wrong while uploading your note.");
+      alert("Note uploaded successfully!");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(err);
+      alert(`Something went wrong while uploading your note. ${msg}`);
     } finally {
       setSubmitting(false);
     }
@@ -154,27 +137,8 @@ export default function CoursePage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this note?")) return;
-
-    // Find note to get storage_path (if any)
-    const note = notes.find((n) => n.id === id);
-
-    try {
-      // 1) If it has a storage file, remove it from the bucket first
-      if (note?.storage_path) {
-        const { error: removeErr } = await supabase.storage
-          .from("notes")
-          .remove([note.storage_path]);
-        if (removeErr) throw removeErr; // owner_delete policy will enforce ownership
-      }
-
-      // 2) Remove DB row
-      const { error } = await supabase.from("notes").delete().eq("id", id);
-      if (error) throw error;
-
-      setNotes((prev) => prev.filter((n) => n.id !== id));
-    } catch (e: any) {
-      alert(e?.message || "Failed to delete note.");
-    }
+    const { error } = await supabase.from("notes").delete().eq("id", id);
+    if (!error) fetchNotes();
   };
 
   return (
@@ -208,9 +172,7 @@ export default function CoursePage() {
                 type="button"
                 onClick={() => setMode("pdf")}
                 className={`rounded-md border px-3 py-1 transition ${
-                  mode === "pdf"
-                    ? "border-purple-500 bg-purple-100 text-purple-700 font-medium"
-                    : "border-slate-300"
+                  mode === "pdf" ? "border-purple-500 bg-purple-100 text-purple-700 font-medium" : "border-slate-300"
                 }`}
               >
                 PDF
@@ -219,9 +181,7 @@ export default function CoursePage() {
                 type="button"
                 onClick={() => setMode("text")}
                 className={`rounded-md border px-3 py-1 transition ${
-                  mode === "text"
-                    ? "border-purple-500 bg-purple-100 text-purple-700 font-medium"
-                    : "border-slate-300"
+                  mode === "text" ? "border-purple-500 bg-purple-100 text-purple-700 font-medium" : "border-slate-300"
                 }`}
               >
                 Paste Text
@@ -230,9 +190,7 @@ export default function CoursePage() {
 
             {mode === "pdf" ? (
               <div className="mb-4">
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Upload PDF (max 10MB)
-                </label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Upload PDF (max 10MB)</label>
                 <div className="flex items-center gap-3">
                   <label className="cursor-pointer rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100">
                     Choose File
@@ -244,9 +202,7 @@ export default function CoursePage() {
                     />
                   </label>
                   <span className="text-xs text-slate-500">
-                    {pdfFile
-                      ? `${pdfFile.name} (${(pdfFile.size / 1024 / 1024).toFixed(1)} MB)`
-                      : "No file chosen"}
+                    {pdfFile ? `${pdfFile.name} (${(pdfFile.size / 1024 / 1024).toFixed(1)} MB)` : "No file chosen"}
                   </span>
                 </div>
               </div>
@@ -259,8 +215,6 @@ export default function CoursePage() {
                 className="mb-4 w-full rounded-lg border border-purple-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-purple-400 placeholder-slate-400"
               />
             )}
-
-            {!!error && <p className="mb-3 text-sm text-red-500">{error}</p>}
 
             <button
               onClick={handleSave}
@@ -309,9 +263,7 @@ export default function CoursePage() {
                       📄 View PDF
                     </a>
                   ) : (
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-                      {note.content}
-                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{note.content}</p>
                   )}
 
                   {note.user_id === user.id && (

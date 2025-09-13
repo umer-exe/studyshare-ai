@@ -1,105 +1,73 @@
-// src/lib/uploadNote.ts
 import { supabase } from "@/lib/supabaseClient";
 
-type UploadArgs = {
-  userId: string;           // auth.user.id
-  courseSlug: string;       // e.g. "dsa"
-  title: string;            // note title from input
-  file?: File | null;       // optional PDF/TXT file
-  text?: string | null;     // optional pasted text
-};
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
-export type NoteRow = {
-  id: string;
-  user_id: string;
-  course_slug: string;
-  title: string;
-  content: string | null;
-  file_url: string | null;
-  created_at: string;
-};
-
-const MAX_FILE_MB = 10;
-const ALLOWED_MIME = ["application/pdf", "text/plain"];
-
-function sanitizeName(name: string) {
-  // keep it simple; remove risky chars
-  return name.replace(/[^\w.-]+/g, "_");
-}
-
-export async function uploadNoteToSupabase({
-  userId,
-  courseSlug,
-  title,
-  file,
-  text,
-}: UploadArgs): Promise<NoteRow> {
-  if (!userId) throw new Error("You must be logged in.");
-  if (!title || !courseSlug) throw new Error("Missing title or course.");
-
-  // At least one of file or text must be provided
-  if (!file && !text) {
-    throw new Error("Please attach a file or paste some text.");
-  }
-
-  let fileUrl: string | null = null;
-  let content: string | null = text ?? null;
-
-  // If a file is provided, validate + upload
-  if (file) {
-    if (file.size > MAX_FILE_MB * 1024 * 1024) {
-      throw new Error(`File too large. Max ${MAX_FILE_MB} MB.`);
+type UploadParams =
+  | {
+      mode: "pdf";
+      userId: string;
+      courseSlug: string;
+      title: string;
+      pdfFile: File;
     }
-    if (!ALLOWED_MIME.includes(file.type)) {
-      throw new Error("Only PDF or TXT files are allowed.");
-    }
+  | {
+    mode: "text";
+    userId: string;
+    courseSlug: string;
+    title: string;
+    textContent: string;
+  };
 
-    const uuid = (typeof crypto !== "undefined" && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+export async function uploadNote(params: UploadParams): Promise<{ ok: boolean; message?: string }> {
+  try {
+    if (params.mode === "pdf") {
+      const { pdfFile, title, userId, courseSlug } = params;
 
-    const cleanName = sanitizeName(file.name);
-    // IMPORTANT: userId as the first path segment (for owner policies)
-    const path = `${userId}/${courseSlug}/${uuid}-${cleanName}`;
+      if (pdfFile.type !== "application/pdf") {
+        return { ok: false, message: "Only PDF files are allowed." };
+      }
+      if (pdfFile.size > MAX_FILE_SIZE) {
+        return { ok: false, message: "File too large! Max size is 10MB." };
+      }
 
-    // Upload to storage
-    const { error: uploadErr } = await supabase.storage
-      .from("notes")
-      .upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+      const filePath = `${userId}/${courseSlug}/${crypto.randomUUID()}-${pdfFile.name}`;
+      const { error: uploadError } = await supabase.storage.from("notes").upload(filePath, pdfFile);
+      if (uploadError) throw uploadError;
 
-    if (uploadErr) {
-      throw new Error(`Upload failed: ${uploadErr.message}`);
-    }
+      const { data: urlData } = supabase.storage.from("notes").getPublicUrl(filePath);
 
-    // Get a public URL
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("notes").getPublicUrl(path);
-
-    fileUrl = publicUrl;
-  }
-
-  // Insert metadata into DB
-  const { data, error } = await supabase
-    .from("notes")
-    .insert([
-      {
-        user_id: userId,
+      const { error: insertError } = await supabase.from("notes").insert({
         course_slug: courseSlug,
-        title,
-        content,     // null if this is a PDF-only note
-        file_url: fileUrl,
-      },
-    ])
-    .select("*")
-    .single();
+        user_id: userId,
+        title: title.trim(),
+        file_url: urlData.publicUrl,
+        storage_path: filePath,
+      });
+      if (insertError) throw insertError;
 
-  if (error) {
-    throw new Error(`Database error: ${error.message}`);
+      return { ok: true };
+    }
+
+    // mode === "text"
+    const { textContent, title, userId, courseSlug } = params;
+    const content = textContent.trim();
+    if (!content) {
+      return { ok: false, message: "Please paste some text." };
+    }
+
+    const { error: insertError } = await supabase.from("notes").insert({
+      course_slug: courseSlug,
+      user_id: userId,
+      title: title.trim(),
+      content,
+      storage_path: null,
+      file_url: null,
+    });
+    if (insertError) throw insertError;
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, message };
   }
-
-  return data as NoteRow;
 }
