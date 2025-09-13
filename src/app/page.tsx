@@ -1,120 +1,213 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/hooks/useAuth";
 
-export default function Home() {
-  const [message, setMessage] = useState("🔄 Checking Supabase...");
-  const [sampleData, setSampleData] = useState<string | null>(null);
+export default function HomePage() {
+  const user = useAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [scrolled, setScrolled] = useState(false);
+
+  const [isLogin, setIsLogin] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const previewCourses = [
+    "Data Structures & Algorithms",
+    "Operating Systems",
+    "DBMS",
+    "Computer Networks",
+    "Discrete Math",
+  ];
+
+  useEffect(() => setLoading(false), [user]);
 
   useEffect(() => {
-    const testSupabase = async () => {
-      try {
-        const { data, error } = await supabase.from("test_table").select("name").limit(1);
-        if (error) throw error;
-        setMessage("✅ Connected to Supabase!");
-        setSampleData(data?.[0]?.name || "No data found");
-      } catch (err) {
-        console.error(err);
-        setMessage("❌ Supabase connection failed.");
-      }
-    };
-
-    testSupabase();
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const handleAuth = async () => {
+    setError(null);
+    if (isLogin) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return setError(error.message);
+    } else {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) return setError(error.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-base">Loading...</p>
+      </div>
+    );
+  }
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-800 px-4">
-      {/* Hero Section */}
-      <header className="text-center mb-12">
-        <h1 className="text-5xl font-bold mb-4">StudyShare.AI</h1>
-        <p className="text-xl text-gray-600">
-          Study Smarter. Share Better. Together with AI.
-        </p>
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-purple-50 to-white text-slate-800">
+      {/* Header */}
+      <header
+        className={`sticky top-0 z-40 w-full backdrop-blur supports-[backdrop-filter]:bg-white/50 ${
+          scrolled ? "shadow-sm" : ""
+        }`}
+      >
+        <div className="mx-auto max-w-6xl px-4 py-3">
+          <a href="/" className="inline-flex items-baseline gap-0 font-extrabold text-lg md:text-xl">
+            <span className="bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
+              StudyShare
+            </span>
+            <span className="text-slate-900">.AI</span>
+          </a>
+          <p className="mt-1 text-xs text-slate-500">
+            Your AI-powered study assistant & collaborative CS resource hub.
+          </p>
+        </div>
       </header>
 
-      {/* Core Sections */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-5xl">
-        {/* Supabase Status */}
-        <section className="p-6 border rounded-lg shadow-sm bg-gray-50">
-          <h2 className="text-2xl font-semibold mb-2">📡 Supabase Connection</h2>
-          <p>{message}</p>
-          {sampleData && (
-            <p className="mt-2 text-gray-600">Sample name: {sampleData}</p>
-          )}
-        </section>
+      <main className="flex-1 px-4 py-10">
+        {!user && (
+          <div className="mx-auto max-w-5xl">
+            {/* Hero */}
+            <div className="mb-9 text-center">
+              <h1 className="pb-1 text-[2.6rem] md:text-5xl font-extrabold tracking-tight leading-[1.2] bg-gradient-to-r from-purple-500 to-violet-600 bg-clip-text text-transparent">
+                Study Smarter. Share Better.
+              </h1>
+              <p className="mt-3 text-[15px] md:text-lg text-slate-700">
+                Learn faster with AI. Share and explore notes by course & topic.
+              </p>
+            </div>
 
-        {/* AI Study Assistant (Placeholder) */}
-        <section className="p-6 border rounded-lg shadow-sm bg-gray-50">
-          <h2 className="text-2xl font-semibold mb-2">🤖 AI Study Assistant</h2>
-          <p className="text-gray-600">
-            Coming soon: Ask questions, summarize notes, and boost your learning
-            with free AI integrations.
-          </p>
-        </section>
+            {/* Features */}
+            <div className="mb-6 grid gap-5 md:grid-cols-2">
+              <div className="relative -rotate-1 rounded-xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
+                <span className="absolute -top-2 left-6 h-5 w-16 -rotate-3 rounded-sm bg-purple-200/70" />
+                <h2 className="mb-1 text-lg font-extrabold text-purple-700">AI Study Assistant</h2>
+                <p className="text-[15px] text-slate-600">
+                  Summarize notes and generate quick quizzes — available after login.
+                </p>
+              </div>
 
-        {/* Shared Resources: Majors → Courses → Resources */}
-        <section className="p-6 border rounded-lg shadow-sm bg-gray-50 md:col-span-2">
-          <h2 className="text-2xl font-semibold mb-4">📚 Shared Resources</h2>
+              <div className="relative rotate-1 rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-5 shadow-sm">
+                <span className="absolute -top-2 left-6 h-5 w-16 rotate-2 rounded-sm bg-fuchsia-200/70" />
+                <h2 className="mb-1 text-lg font-extrabold text-fuchsia-700">Shared Resource Bank</h2>
+                <p className="mb-3 text-[15px] text-slate-600">
+                  Explore which CS courses are available. Sign in to view and upload notes.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {previewCourses.map((c) => (
+                    <span
+                      key={c}
+                      className="inline-flex items-center rounded-full border border-fuchsia-200 bg-fuchsia-100 px-3 py-0.5 text-xs font-medium text-fuchsia-700"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                  <span className="inline-flex items-center rounded-full border border-fuchsia-200 bg-fuchsia-50 px-3 py-0.5 text-xs font-medium text-fuchsia-700">
+                    …and more
+                  </span>
+                </div>
+              </div>
+            </div>
 
-          {/* Majors */}
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold mb-2">Major</h3>
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full cursor-pointer">
-              Computer Science
-            </span>
-          </div>
+            <p className="mb-9 text-center text-[13px] text-slate-500">
+              🔒 Sign in to access notes, upload your own, and use AI features.
+            </p>
 
-          {/* Courses */}
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold mb-2">Courses</h3>
-            <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full cursor-pointer">
-                Data Structures
-              </span>
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full cursor-pointer">
-                Algorithms
-              </span>
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full cursor-pointer">
-                Operating Systems
-              </span>
+            {/* Auth Card */}
+            <div className="mx-auto max-w-md rounded-xl bg-white p-7 shadow-md">
+              <h3 className="mb-5 text-center text-[1.3rem] font-extrabold text-purple-700">
+                {isLogin ? "Login" : "Create an Account"}
+              </h3>
+
+              <input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mb-3 w-full rounded-lg border border-slate-300 bg-slate-50 p-2.5 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-400"
+              />
+
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mb-3 w-full rounded-lg border border-slate-300 bg-slate-50 p-2.5 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-400"
+              />
+
+              {error && <p className="mb-3 text-xs text-red-500">{error}</p>}
+
+              <button
+                onClick={handleAuth}
+                className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-purple-700"
+              >
+                {isLogin ? "Login" : "Sign Up"}
+              </button>
+
+              <p
+                onClick={() => setIsLogin(!isLogin)}
+                className="mt-3 cursor-pointer text-center text-xs text-purple-600 hover:underline"
+              >
+                {isLogin ? "New here? Create an account" : "Already have an account? Login"}
+              </p>
             </div>
           </div>
+        )}
 
-          {/* Resources */}
-          <div>
-            <h3 className="text-xl font-semibold mb-2">Resources</h3>
-            <ul className="list-disc pl-5 space-y-1 text-gray-700">
-              <li>Introduction to Arrays (PDF)</li>
-              <li>Linked List Notes (Text)</li>
-              <li>Sorting Algorithms Summary (PDF)</li>
-            </ul>
+        {user && (
+          <div className="mx-auto max-w-4xl">
+            <h1 className="mb-7 text-2xl font-bold">
+              👋 Welcome back, {user.email.split("@")[0]}!
+            </h1>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="rounded-xl border bg-white p-5 shadow-sm">
+                <h2 className="mb-1 text-lg font-semibold text-purple-600">
+                  Step 1: Pick a Course
+                </h2>
+                <p className="mb-2 text-sm text-slate-600">
+                  Start with any CS course — DSA, OS, DBMS, Networks.
+                </p>
+                <button className="text-xs text-purple-600 underline hover:text-purple-700">
+                  View Courses →
+                </button>
+              </div>
+              <div className="rounded-xl border bg-white p-5 shadow-sm">
+                <h2 className="mb-1 text-lg font-semibold text-purple-600">
+                  Step 2: Upload a Note
+                </h2>
+                <p className="mb-2 text-sm text-slate-600">
+                  Upload your first PDF or text note and auto-extract content.
+                </p>
+                <button className="text-xs text-purple-600 underline hover:text-purple-700">
+                  Upload Note →
+                </button>
+              </div>
+            </div>
           </div>
-        </section>
-      </div>
+        )}
+      </main>
 
       {/* Footer */}
-      <footer className="mt-12 text-sm text-gray-500 flex flex-col items-center space-y-2">
-        <p>© {new Date().getFullYear()} StudyShare.AI — Study Smarter. Share Better. Together with AI.</p>
-        <div className="flex space-x-4">
-          <a
-            href="https://github.com/umer-exe"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-gray-700 hover:text-gray-900"
-          >
-            GitHub
-          </a>
-          <a
-            href="https://www.linkedin.com/in/umer-malik28"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-gray-700 hover:text-gray-900"
-          >
-            LinkedIn
-          </a>
+      <footer className="mt-10 border-t border-slate-200">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs text-slate-500 sm:flex-row">
+          <p>© {new Date().getFullYear()} StudyShare.AI — Study smarter, share better.</p>
+          <div className="flex gap-3">
+            <a href="https://github.com/umer-exe" className="hover:text-slate-700">
+              GitHub
+            </a>
+            <a href="https://www.linkedin.com/in/umer-malik28" className="hover:text-slate-700">
+              LinkedIn
+            </a>
+          </div>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }

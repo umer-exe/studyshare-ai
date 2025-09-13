@@ -1,111 +1,72 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../../../lib/supabaseClient";
-import Navbar from "../../../components/Navbar";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/hooks/useAuth";
+import { useRouter } from "next/navigation";
 
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [session, setSession] = useState<any>(null);
-  const [message, setMessage] = useState("");
+  const [isLogin, setIsLogin] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const user = useAuth();
+  const router = useRouter();
 
+  // Redirect logged-in users to home
   useEffect(() => {
-    const getSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setSession(data.session);
-    };
+    if (user) router.push("/");
+  }, [user]);
 
-    getSession();
+  const handleAuth = async () => {
+    setError(null);
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  const handleSignup = async () => {
-    setMessage("Signing up...");
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) setMessage(error.message);
-    else setMessage("✅ Signup successful! Check your email for confirmation.");
-  };
-
-  const handleLogin = async () => {
-    setMessage("Logging in...");
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setMessage(error.message);
-    else setMessage("✅ Login successful!");
-  };
-
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) setMessage(error.message);
-    else setMessage("✅ Logged out!");
+    if (isLogin) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return setError(error.message);
+      router.push("/");
+    } else {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) return setError(error.message);
+      router.push("/");
+    }
   };
 
   return (
-    <>
-      <Navbar />
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white to-slate-50 px-4">
-        <div className="w-full max-w-md p-8 bg-slate-50 border border-slate-300 rounded-xl shadow-sm">
-          {/* Branding */}
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-4 text-center">
-            StudyShare.AI
-          </h1>
-          <p className="text-slate-500 text-center mb-6">
-            Study Smarter. Share Better. Together with AI.
-          </p>
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white text-black">
+      <h1 className="text-3xl font-bold mb-6">{isLogin ? "Login" : "Sign Up"}</h1>
 
-          {session ? (
-            <div className="text-center space-y-4">
-              <p className="text-slate-800 font-medium">Logged in as {session.user.email}</p>
-              <button
-                onClick={handleLogout}
-                className="w-full px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-              >
-                Logout
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-slate-400 transition"
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-3 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-slate-400 transition"
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={handleSignup}
-                  className="flex-1 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-                >
-                  Signup
-                </button>
-                <button
-                  onClick={handleLogin}
-                  className="flex-1 px-5 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition"
-                >
-                  Login
-                </button>
-              </div>
-            </div>
-          )}
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="mb-4 p-2 border rounded w-64 bg-gray-100 text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+      />
 
-          {message && (
-            <p className="mt-4 text-center text-rose-600 font-medium">{message}</p>
-          )}
-        </div>
-      </main>
-    </>
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        className="mb-4 p-2 border rounded w-64 bg-gray-100 text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+      />
+
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+
+      <button
+        onClick={handleAuth}
+        className="bg-blue-500 text-white px-6 py-2 rounded mb-2 hover:bg-blue-600 transition"
+      >
+        {isLogin ? "Login" : "Sign Up"}
+      </button>
+
+      <button
+        onClick={() => setIsLogin(!isLogin)}
+        className="text-blue-500 underline"
+      >
+        {isLogin ? "Create an account" : "Already have an account?"}
+      </button>
+    </div>
   );
 }
