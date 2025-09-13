@@ -1,40 +1,45 @@
 "use client";
 
-import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 export default function Navbar() {
-  const user = useAuth();
+  const { user, loading } = useAuth();  // ✅ destructure correctly
+  const router = useRouter();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    // user state updates automatically via useAuth
+    router.replace("/");
   };
 
   return (
-    <nav className="flex justify-between items-center p-4 bg-gray-800 text-white">
-      <Link href="/" className="text-xl font-bold">StudyShare.AI</Link>
-      <div>
-        {user ? (
-          <>
-            <span className="mr-4">{user.email}</span>
+    <nav className="flex items-center justify-between bg-white px-6 py-3 shadow">
+      <span className="font-bold text-purple-700">StudyShare.AI</span>
+
+      {!loading && (
+        <>
+          {user ? (
+            <div className="flex items-center gap-3">
+              {/* ✅ Safe access with optional chaining */}
+              <span className="text-sm text-slate-700">{user.email}</span>
+              <button
+                onClick={handleLogout}
+                className="bg-red-500 px-3 py-1 rounded text-white hover:bg-red-600 transition"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={handleLogout}
-              className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 transition"
+              onClick={() => router.push("/")}
+              className="bg-purple-600 px-3 py-1 rounded text-white hover:bg-purple-700 transition"
             >
-              Logout
+              Login
             </button>
-          </>
-        ) : (
-          <Link
-            href="/auth"
-            className="bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 transition"
-          >
-            Login / Signup
-          </Link>
-        )}
-      </div>
+          )}
+        </>
+      )}
     </nav>
   );
 }
