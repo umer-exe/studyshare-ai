@@ -3,56 +3,63 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
 
-// Map slugs to friendly names
-const COURSE_NAME: Record<string, string> = {
-  "dsa": "Data Structures & Algorithms",
-  "discrete-math": "Discrete Math",
-  "dbms": "Database Management Systems",
-  "diff-eq": "Differential Equations",
-};
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-type LocalNote = {
+type Note = {
   id: string;
   title: string;
-  type: "pdf" | "text";
-  fileName?: string;
-  content?: string;
-  createdAt: string;
+  file_url?: string | null;
+  storage_path?: string | null;
+  content?: string | null;
+  user_id: string;
+  created_at: string;
 };
+
+function sanitizeName(name: string) {
+  // Keep filename simple for URLs
+  return name.replace(/[^\w.-]+/g, "_");
+}
 
 export default function CoursePage() {
   const { slug } = useParams<{ slug: string | string[] }>();
-  const { user, loading } = useAuth();
+  const slugStr = useMemo(
+    () => (typeof slug === "string" ? slug : Array.isArray(slug) ? slug[0] : ""),
+    [slug]
+  );
   const router = useRouter();
+  const { user, loading } = useAuth();
 
-  // Resolve slug as a string (handle array/undefined safely)
-  const slugStr = useMemo(() => {
-    if (typeof slug === "string") return slug;
-    if (Array.isArray(slug)) return slug[0];
-    return "";
-  }, [slug]);
+  const [mode, setMode] = useState<"pdf" | "text">("pdf");
+  const [title, setTitle] = useState("");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [textContent, setTextContent] = useState("");
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Pretty course name
-  const prettyName = useMemo(() => {
-    if (!slugStr) return "Course";
-    return COURSE_NAME[slugStr] ??
-      slugStr.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-  }, [slugStr]);
-
-  // Auth gate
+  // Redirect if not logged in
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace("/");
   }, [user, loading, router]);
 
-  // Local MVP state
-  const [mode, setMode] = useState<"pdf" | "text">("pdf");
-  const [title, setTitle] = useState("");
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [textContent, setTextContent] = useState("");
-  const [notes, setNotes] = useState<LocalNote[]>([]);
+  // Fetch notes
+  const fetchNotes = async () => {
+    const { data, error } = await supabase
+      .from("notes")
+      .select("id,title,file_url,storage_path,content,user_id,created_at")
+      .eq("course_slug", slugStr)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) setNotes(data as Note[]);
+  };
+
+  useEffect(() => {
+    if (slugStr) fetchNotes();
+  }, [slugStr]);
 
   if (loading || !user) {
     return (
@@ -62,33 +69,112 @@ export default function CoursePage() {
     );
   }
 
-  const handleSaveLocal = () => {
+  const handleSave = async () => {
+    setError(null);
+
     if (!title.trim()) {
-      alert("Please add a title.");
-      return;
-    }
-    if (mode === "pdf" && !pdfFile) {
-      alert("Please choose a PDF file.");
-      return;
-    }
-    if (mode === "text" && !textContent.trim()) {
-      alert("Please paste some text.");
+      setError("Please give your note a title.");
       return;
     }
 
-    const newNote: LocalNote = {
-      id: crypto.randomUUID(),
-      title: title.trim(),
-      type: mode,
-      fileName: mode === "pdf" ? pdfFile?.name : undefined,
-      content: mode === "text" ? textContent.trim() : undefined,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      setSubmitting(true);
 
-    setNotes((prev) => [newNote, ...prev]);
-    setTitle("");
-    setPdfFile(null);
-    setTextContent("");
+      if (mode === "pdf") {
+        if (!pdfFile) {
+          setError("Please select a PDF file.");
+          return;
+        }
+        if (pdfFile.type !== "application/pdf") {
+          setError("Only PDF files are allowed.");
+          return;
+        }
+        if (pdfFile.size > MAX_FILE_SIZE) {
+          setError("File too large! Max size is 10MB.");
+          return;
+        }
+
+        // Build a storage path that starts with userId (needed for owner policies)
+        const uuid =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        const cleanName = sanitizeName(pdfFile.name);
+        const storagePath = `${user.id}/${slugStr}/${uuid}-${cleanName}`;
+
+        // Upload PDF to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from("notes")
+          .upload(storagePath, pdfFile, { cacheControl: "3600", upsert: false });
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from("notes")
+          .getPublicUrl(storagePath);
+
+        // Insert row in DB (store storage_path too)
+        const { error: insertError } = await supabase.from("notes").insert({
+          course_slug: slugStr,
+          user_id: user.id,
+          title: title.trim(),
+          file_url: urlData.publicUrl,
+          storage_path: storagePath,
+        });
+        if (insertError) throw insertError;
+      } else {
+        if (!textContent.trim()) {
+          setError("Please paste some text.");
+          return;
+        }
+        const { error: insertError } = await supabase.from("notes").insert({
+          course_slug: slugStr,
+          user_id: user.id,
+          title: title.trim(),
+          content: textContent.trim(),
+          file_url: null,
+          storage_path: null,
+        });
+        if (insertError) throw insertError;
+      }
+
+      setTitle("");
+      setPdfFile(null);
+      setTextContent("");
+      await fetchNotes();
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message || "Something went wrong while uploading your note.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this note?")) return;
+
+    // Find note to get storage_path (if any)
+    const note = notes.find((n) => n.id === id);
+
+    try {
+      // 1) If it has a storage file, remove it from the bucket first
+      if (note?.storage_path) {
+        const { error: removeErr } = await supabase.storage
+          .from("notes")
+          .remove([note.storage_path]);
+        if (removeErr) throw removeErr; // owner_delete policy will enforce ownership
+      }
+
+      // 2) Remove DB row
+      const { error } = await supabase.from("notes").delete().eq("id", id);
+      if (error) throw error;
+
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+    } catch (e: any) {
+      alert(e?.message || "Failed to delete note.");
+    }
   };
 
   return (
@@ -99,14 +185,12 @@ export default function CoursePage() {
           ← Back to courses
         </Link>
 
-        {/* Heading */}
-        <h1 className="mb-6 text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
-          {prettyName}
+        <h1 className="mb-6 text-3xl font-extrabold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
+          {slugStr.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
         </h1>
 
-        {/* Upload + Coming Soon */}
+        {/* Upload Form */}
         <div className="grid gap-6 md:grid-cols-3">
-          {/* Upload card */}
           <section className="md:col-span-2 rounded-xl border border-purple-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-xl font-semibold text-purple-700">Upload a Note</h2>
 
@@ -117,29 +201,28 @@ export default function CoursePage() {
               placeholder='e.g. "Week 3 — Sorting Notes"'
               className="mb-3 w-full rounded-lg border border-purple-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-purple-400 placeholder-slate-400"
             />
-            <p className="mb-3 text-xs text-purple-600">
-              💡 Use a descriptive title — it helps others find your note quickly.
-            </p>
 
             {/* Mode toggle */}
             <div className="mb-4 flex gap-2 text-sm">
               <button
+                type="button"
+                onClick={() => setMode("pdf")}
                 className={`rounded-md border px-3 py-1 transition ${
                   mode === "pdf"
                     ? "border-purple-500 bg-purple-100 text-purple-700 font-medium"
-                    : "border-slate-300 bg-white"
+                    : "border-slate-300"
                 }`}
-                onClick={() => setMode("pdf")}
               >
                 PDF
               </button>
               <button
+                type="button"
+                onClick={() => setMode("text")}
                 className={`rounded-md border px-3 py-1 transition ${
                   mode === "text"
                     ? "border-purple-500 bg-purple-100 text-purple-700 font-medium"
-                    : "border-slate-300 bg-white"
+                    : "border-slate-300"
                 }`}
-                onClick={() => setMode("text")}
               >
                 Paste Text
               </button>
@@ -148,7 +231,7 @@ export default function CoursePage() {
             {mode === "pdf" ? (
               <div className="mb-4">
                 <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Upload PDF
+                  Upload PDF (max 10MB)
                 </label>
                 <div className="flex items-center gap-3">
                   <label className="cursor-pointer rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100">
@@ -157,11 +240,13 @@ export default function CoursePage() {
                       type="file"
                       accept="application/pdf"
                       className="hidden"
-                      onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+                      onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
                     />
                   </label>
                   <span className="text-xs text-slate-500">
-                    {pdfFile ? pdfFile.name : "No file chosen"}
+                    {pdfFile
+                      ? `${pdfFile.name} (${(pdfFile.size / 1024 / 1024).toFixed(1)} MB)`
+                      : "No file chosen"}
                   </span>
                 </div>
               </div>
@@ -175,16 +260,15 @@ export default function CoursePage() {
               />
             )}
 
-            <button
-              onClick={handleSaveLocal}
-              className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-purple-700"
-            >
-              Save (MVP — local only)
-            </button>
+            {!!error && <p className="mb-3 text-sm text-red-500">{error}</p>}
 
-            <p className="mt-2 text-xs text-slate-500">
-              (In the real version, we’ll upload PDFs to Supabase Storage and save note metadata to the database.)
-            </p>
+            <button
+              onClick={handleSave}
+              disabled={submitting}
+              className="w-full rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition disabled:opacity-50"
+            >
+              {submitting ? "Saving..." : "Save Note"}
+            </button>
           </section>
 
           {/* Coming soon */}
@@ -192,15 +276,7 @@ export default function CoursePage() {
             <h3 className="text-base font-semibold text-purple-700">
               Create Topic <span className="text-xs text-slate-500">— coming soon</span>
             </h3>
-            <p className="mt-2 text-sm">
-              You’ll be able to organize notes into topics inside each course.
-            </p>
-            <button
-              disabled
-              className="mt-3 cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-3 py-1 text-xs text-slate-400"
-            >
-              Create Topic (disabled)
-            </button>
+            <p className="mt-2 text-sm">Organize notes into topics inside each course.</p>
           </aside>
         </div>
 
@@ -209,39 +285,46 @@ export default function CoursePage() {
           <h2 className="mb-3 text-lg font-semibold text-purple-700">Notes</h2>
 
           {notes.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-purple-200 bg-purple-50/50 p-6 text-sm text-slate-600">
+            <div className="rounded-lg border border-dashed border-purple-200 bg-purple-50/50 p-6 text-center text-sm text-slate-600">
               No notes yet. Be the first to upload!
             </div>
           ) : (
-            <div className="space-y-3">
-              {notes.map((n) => (
-                <div key={n.id} className="rounded-lg border bg-white p-4 shadow-sm">
+            <ul className="space-y-3">
+              {notes.map((note) => (
+                <li key={note.id} className="rounded-lg border bg-white p-4 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-slate-800">{n.title}</h4>
+                    <h4 className="font-medium text-slate-800">{note.title}</h4>
                     <span className="text-xs text-slate-500">
-                      {new Date(n.createdAt).toLocaleDateString()}
+                      {new Date(note.created_at).toLocaleDateString()}
                     </span>
                   </div>
 
-                  {n.type === "pdf" ? (
-                    <p className="mt-2 text-xs text-slate-500">
-                      PDF selected: <span className="font-medium">{n.fileName}</span>
-                    </p>
+                  {note.file_url ? (
+                    <a
+                      href={note.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 block text-xs text-purple-600 underline"
+                    >
+                      📄 View PDF
+                    </a>
                   ) : (
-                    <p className="mt-2 line-clamp-3 text-sm text-slate-600">{n.content}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                      {note.content}
+                    </p>
                   )}
 
-                  <div className="mt-3 flex gap-2">
-                    <button className="rounded border px-2 py-1 text-xs hover:bg-slate-50">
-                      Summarize
+                  {note.user_id === user.id && (
+                    <button
+                      onClick={() => handleDelete(note.id)}
+                      className="mt-2 text-xs text-red-500 hover:underline"
+                    >
+                      Delete
                     </button>
-                    <button className="rounded border px-2 py-1 text-xs hover:bg-slate-50">
-                      Generate Quiz
-                    </button>
-                  </div>
-                </div>
+                  )}
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </section>
       </div>
