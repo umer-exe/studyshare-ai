@@ -6,6 +6,7 @@ export const COURSES: Course[] = [
   { name: "Discrete Math",               slug: "discrete-math" },
   { name: "Database Management Systems", slug: "dbms" },
   { name: "Differential Equations",      slug: "diff-eq" },
+  { name: "Applied Physics",          slug: "ap" },
   // add more here later…
 ];
 
