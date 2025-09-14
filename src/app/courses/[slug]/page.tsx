@@ -6,6 +6,8 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
 
+import { COURSE_SLUGS } from "@/constants/courses";
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 type Note = {
@@ -52,6 +54,12 @@ export default function CoursePage() {
 
     if (!error && data) setNotes(data as Note[]);
   }, [slugStr]);
+  
+
+  useEffect(() => {
+  if (!slugStr) return;
+  if (!COURSE_SLUGS.has(slugStr)) router.replace("/courses");
+}, [slugStr, router]);
 
   useEffect(() => {
     fetchNotes();

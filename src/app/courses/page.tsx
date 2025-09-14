@@ -4,19 +4,13 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-
-const COURSES = [
-  { name: "Data Structures & Algorithms", slug: "dsa" },
-  { name: "Discrete Math", slug: "discrete-math" },
-  { name: "Database Management Systems", slug: "dbms" },
-  { name: "Differential Equations", slug: "diff-eq" },
-];
+import { COURSES } from "@/constants/courses";
 
 export default function CoursesPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  // Optional: restrict to logged-in users
+  // Keep this page private like the dashboard
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace("/");
@@ -52,7 +46,7 @@ export default function CoursesPage() {
           📚 Browse Courses
         </h1>
         <p className="mt-2 mb-8 text-sm md:text-base text-slate-600">
-          Select a course to view notes or upload your own.
+          Select a course to view or upload notes.
         </p>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

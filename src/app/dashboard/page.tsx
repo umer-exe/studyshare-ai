@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
+import { COURSES } from "@/constants/courses";
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -30,15 +31,6 @@ export default function DashboardPage() {
     await supabase.auth.signOut();
     router.replace("/");
   };
-
-  // ✅ 4 originals only
-  const courseMap: Record<string, string> = {
-    DSA: "dsa",
-    "Discrete Math": "discrete-math",
-    DBMS: "dbms",
-    "Differential Equations": "diff-eq",
-  };
-  const courses = Object.keys(courseMap);
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-purple-50 to-white text-slate-800">
@@ -68,19 +60,19 @@ export default function DashboardPage() {
             👋 Welcome, {user.email?.split("@")[0] ?? "User"}!
           </h1>
 
-          {/* Course cards (4 only) */}
+          {/* Course cards (from shared constant) */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {courses.map((course) => (
+            {COURSES.map((c) => (
               <div
-                key={course}
+                key={c.slug}
                 className="rounded-xl border bg-white p-5 shadow-sm hover:shadow-md hover:scale-[1.01] transition"
               >
-                <h2 className="mb-2 text-lg font-semibold text-purple-600">{course}</h2>
+                <h2 className="mb-2 text-lg font-semibold text-purple-600">{c.name}</h2>
                 <p className="text-sm text-slate-600">
                   Explore notes, upload resources, and ask AI for help in this course.
                 </p>
                 <button
-                  onClick={() => router.push(`/courses/${courseMap[course]}`)}
+                  onClick={() => router.push(`/courses/${c.slug}`)}
                   className="mt-3 text-xs text-purple-600 underline hover:text-purple-700"
                 >
                   Go to course →
@@ -89,7 +81,7 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Quick actions (Upload only for MVP) */}
+          {/* Quick action */}
           <div className="mt-10 grid gap-5 md:grid-cols-2">
             <div className="rounded-xl border bg-white p-5 shadow-sm hover:shadow-md transition">
               <h2 className="mb-2 text-lg font-semibold text-purple-600">Upload a Note</h2>
@@ -97,7 +89,7 @@ export default function DashboardPage() {
                 Pick a course, then upload a PDF or paste text.
               </p>
               <p className="mt-2 text-xs text-slate-500">
-                💡 Tip: Use a descriptive title like <em>“Week 3 — Sorting Notes”</em> so others can find it easily.
+                💡 Tip: Use a descriptive title like <em>“Week 3 — Sorting Notes”</em>.
               </p>
               <button
                 onClick={() => router.push("/courses")}
@@ -108,12 +100,10 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Recent activity */}
+          {/* Recent activity (placeholder) */}
           <div className="mt-10 p-4 rounded-xl border border-dashed border-purple-200 bg-purple-50/50">
             <h2 className="mb-2 text-lg font-semibold text-purple-600">Resume where you left off</h2>
-            <p className="text-sm text-slate-600">
-              No recent activity yet. Start by selecting a course above!
-            </p>
+            <p className="text-sm text-slate-600">No recent activity yet. Start by selecting a course above!</p>
           </div>
         </div>
       </main>
